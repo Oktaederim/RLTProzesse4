@@ -128,35 +128,26 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             states[1] = { ...currentState };
             
-            // *** KORRIGIERTE LOGIK FÜR KÜHLUNG / ENTFEUCHTUNG ***
-            const needsCooling = currentState.t > zuluftSoll.t + TOLERANCE;
-            const needsDehumidification = inputs.kuehlmodus === 'dehumidify' && currentState.x > zuluftSoll.x + TOLERANCE;
-
-            if (inputs.kuehlerAktiv && (needsCooling || needsDehumidification)) {
-                if (needsDehumidification) {
+            // *** FINALE KORREKTUR DER KERNLOGIK ***
+            if (inputs.kuehlerAktiv) {
+                // Priorität 1: Ist Entfeuchtung erforderlich?
+                if (inputs.kuehlmodus === 'dehumidify' && currentState.x > zuluftSoll.x + TOLERANCE) {
                     const tempNachKuehler = getTd(zuluftSoll.x, inputs.druck);
                     const hNachKuehler = getH(tempNachKuehler, zuluftSoll.x);
                     operations.k.p = massenstrom_kg_s * (currentState.h - hNachKuehler);
                     operations.k.kondensat = massenstrom_kg_s * (currentState.x - zuluftSoll.x) / 1000 * 3600;
                     currentState = { t: tempNachKuehler, h: hNachKuehler, x: zuluftSoll.x, rh: getRh(tempNachKuehler, zuluftSoll.x, inputs.druck) };
-                } else if (needsCooling && inputs.kuehlmodus === 'sensible') {
-                    // This part handles sensible cooling only if dehumidification is not needed.
-                    const startDewPoint = getTd(currentState.x, inputs.druck);
-                    if (zuluftSoll.t < startDewPoint) { // If cooling target is below dew point, condensation will occur
-                        const x_final = getX(zuluftSoll.t, 100, inputs.druck);
-                        const h_final = getH(zuluftSoll.t, x_final);
-                        operations.k.p = massenstrom_kg_s * (currentState.h - h_final);
-                        operations.k.kondensat = massenstrom_kg_s * (currentState.x - x_final) / 1000 * 3600;
-                        currentState = { t: zuluftSoll.t, h: h_final, x: x_final, rh: getRh(zuluftSoll.t, x_final, inputs.druck) };
-                    } else { // Pure sensible cooling
-                        const h_final = getH(zuluftSoll.t, currentState.x);
-                        operations.k.p = massenstrom_kg_s * (currentState.h - h_final);
-                        currentState = { t: zuluftSoll.t, h: h_final, x: currentState.x, rh: getRh(zuluftSoll.t, currentState.x, inputs.druck)};
-                    }
+                }
+                // Priorität 2: Wenn nicht, ist eine rein sensible Kühlung erforderlich?
+                else if (currentState.t > zuluftSoll.t + TOLERANCE) {
+                    const h_final = getH(zuluftSoll.t, currentState.x);
+                    operations.k.p = massenstrom_kg_s * (currentState.h - h_final);
+                    currentState = { t: zuluftSoll.t, h: h_final, x: currentState.x, rh: getRh(zuluftSoll.t, currentState.x, inputs.druck)};
                 }
             }
             states[2] = { ...currentState };
 
+            // Nacherhitzer-Logik bleibt unverändert
             if (currentState.t < zuluftSoll.t - TOLERANCE) {
                 const h_final = getH(zuluftSoll.t, currentState.x);
                 operations.ne.p = massenstrom_kg_s * (h_final - currentState.h);
@@ -181,6 +172,7 @@ document.addEventListener('DOMContentLoaded', () => {
             dom.processOverviewContainer.innerHTML = `<div class="process-overview process-error">Ein unerwarteter Fehler ist aufgetreten.</div>`;
         }
     }
+    
     function formatGerman(num, decimals = 0) {
         if (isNaN(num) || num === null) return '--';
         return num.toLocaleString('de-DE', {
