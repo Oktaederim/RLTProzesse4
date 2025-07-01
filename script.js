@@ -75,7 +75,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function calculateAll() {
         try {
-            let warningMessage = ''; // Initialisiert die Warnmeldung
+            let warningMessage = '';
             const checkedKuehlmodus = document.querySelector('input[name="kuehlmodus"]:checked');
             const inputs = {
                 tempAussen: parseFloat(dom.tempAussen.value) || 0, rhAussen: parseFloat(dom.rhAussen.value) || 0,
@@ -284,23 +284,19 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    // *** KORRIGIERTE FUNKTION ***
     function updateStateNode(node, state, colorClass, isInactive = false) {
-        node.className = 'state-node'; // Setzt Klassen zurück
+        node.className = 'state-node';
         if (colorClass) node.classList.add(colorClass);
         if (isInactive) node.classList.add('inactive');
         if (node.id === 'node-final') node.classList.add('final-state');
 
-        // Extrahiert den Index aus der Node-ID (z.B. "0" aus "node-0" oder "final" aus "node-final")
         const index = node.id.split('-')[1];
-        if (!index) return; // Sicherheitsabfrage
+        if (!index) return;
 
-        // Wählt die Anzeige-Spans über ihre eindeutige ID aus - das ist robuster
         const tSpan = node.querySelector(`#res-t-${index}`);
         const rhSpan = node.querySelector(`#res-rh-${index}`);
         const xSpan = node.querySelector(`#res-x-${index}`);
 
-        // Weist die formatierten Werte sicher zu
         if (tSpan) tSpan.textContent = formatGerman(state.t, 1);
         if (rhSpan) rhSpan.textContent = formatGerman(state.rh, 1);
         if (xSpan) xSpan.textContent = formatGerman(state.x, 2);
@@ -394,35 +390,61 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- INITIALIZATION ---
+    // ** KORRIGIERTE UND STRUKTURIERTE FUNKTION **
     function addEventListeners() {
         // Buttons
         if (dom.resetBtn) dom.resetBtn.addEventListener('click', resetToDefaults);
         if (dom.resetSlidersBtn) dom.resetSlidersBtn.addEventListener('click', resetSlidersToRef);
         if (dom.setReferenceBtn) dom.setReferenceBtn.addEventListener('click', handleSetReference);
 
-        // All other inputs trigger a recalculation
-        const inputsToListen = [
-            dom.tempAussen, dom.rhAussen, dom.druck, dom.preisWaerme, dom.preisStrom,
-            dom.preisKaelte, dom.tempHeizVorlauf, dom.tempHeizRuecklauf, 
-            dom.tempKuehlVorlauf, dom.tempKuehlRuecklauf, dom.sfp, dom.stundenHeizen, dom.stundenKuehlen,
-            dom.kuehlerAktiv
+        // Alle 'einfachen' Text- und Zahlenfelder, die nur eine Neuberechnung auslösen
+        const simpleInputs = [
+            dom.tempAussen, dom.rhAussen, dom.druck, dom.preisWaerme, dom.preisStrom, dom.preisKaelte,
+            dom.tempHeizVorlauf, dom.tempHeizRuecklauf, dom.tempKuehlVorlauf, dom.tempKuehlRuecklauf,
+            dom.sfp, dom.stundenHeizen, dom.stundenKuehlen
         ];
-        inputsToListen.forEach(input => {
-            if (input) {
-                const eventType = input.type === 'checkbox' ? 'change' : 'input';
-                input.addEventListener(eventType, calculateAll);
-            }
+        simpleInputs.forEach(input => {
+            if (input) input.addEventListener('input', calculateAll);
         });
-        
-        if(dom.kuehlmodusInputs) dom.kuehlmodusInputs.forEach(radio => radio.addEventListener('change', () => { handleKuehlerToggle(); calculateAll(); }));
-        
-        if (dom.betriebsstundenGesamt) dom.betriebsstundenGesamt.addEventListener('input', (e) => { enforceLimits(e.target); updateBetriebszeit(e.target.id); calculateAll(); });
-        if (dom.betriebstageGesamt) dom.betriebstageGesamt.addEventListener('input', (e) => { enforceLimits(e.target); updateBetriebszeit(e.target.id); calculateAll(); });
 
-        if (dom.volumenstrom) dom.volumenstrom.addEventListener('input', () => { enforceLimits(dom.volumenstrom); syncAllSlidersToInputs(); calculateAll(); });
-        if (dom.tempZuluft) dom.tempZuluft.addEventListener('input', () => { enforceLimits(dom.tempZuluft); syncAllSlidersToInputs(); calculateAll(); });
-        if (dom.rhZuluft) dom.rhZuluft.addEventListener('input', () => { enforceLimits(dom.rhZuluft); syncAllSlidersToInputs(); calculateAll(); });
-        
+        // Checkboxen und Radios
+        if (dom.kuehlerAktiv) dom.kuehlerAktiv.addEventListener('change', calculateAll);
+        if (dom.kuehlmodusInputs) dom.kuehlmodusInputs.forEach(radio => radio.addEventListener('change', () => {
+            handleKuehlerToggle();
+            calculateAll();
+        }));
+
+        // Felder mit zusätzlicher Logik (z.B. Synchronisation mit anderen Feldern)
+        if (dom.betriebsstundenGesamt) dom.betriebsstundenGesamt.addEventListener('input', (e) => {
+            enforceLimits(e.target);
+            updateBetriebszeit(e.target.id);
+            calculateAll();
+        });
+        if (dom.betriebstageGesamt) dom.betriebstageGesamt.addEventListener('input', (e) => {
+            enforceLimits(e.target);
+            updateBetriebszeit(e.target.id);
+            calculateAll();
+        });
+
+        // Felder, die zusätzlich die Slider synchronisieren müssen
+        if (dom.volumenstrom) dom.volumenstrom.addEventListener('input', () => {
+            enforceLimits(dom.volumenstrom);
+            syncAllSlidersToInputs();
+            calculateAll();
+        });
+        if (dom.tempZuluft) dom.tempZuluft.addEventListener('input', () => {
+            enforceLimits(dom.tempZuluft);
+            syncAllSlidersToInputs();
+            calculateAll();
+        });
+        // *** HIER IST DIE ENTSCHEIDENDE KORREKTUR ***
+        if (dom.rhZuluft) dom.rhZuluft.addEventListener('input', () => {
+            enforceLimits(dom.rhZuluft);
+            syncAllSlidersToInputs();
+            calculateAll();
+        });
+
+        // Event Listeners für die Slider selbst
         if (dom.volumenstromSlider) dom.volumenstromSlider.addEventListener('input', () => {
             dom.volumenstrom.value = dom.volumenstromSlider.value;
             dom.volumenstromLabel.textContent = formatGerman(parseFloat(dom.volumenstromSlider.value), 0);
