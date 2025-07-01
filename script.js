@@ -105,7 +105,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 zuluftSoll.x = getX(zuluftSoll.t, zuluftSoll.rh, inputs.druck); 
                 const zielTaupunkt = getTd(zuluftSoll.x, inputs.druck);
                 
-                // *** ANGEPASSTE PLAUSIBILITÄTSPRÜFUNG ***
                 if (zielTaupunkt < inputs.tempKuehlVorlauf + 2.0) { 
                     warningMessage = `Plausibilitätsfehler: Kühlwassertemperatur (${formatGerman(inputs.tempKuehlVorlauf, 1)}°C) ist zu hoch, um den Taupunkt von ${formatGerman(zielTaupunkt, 1)}°C zu erreichen. Die angezeigten Werte sind daher nicht korrekt.`;
                 }
@@ -171,14 +170,14 @@ document.addEventListener('DOMContentLoaded', () => {
             currentPowers.waerme = operations.ve.p + operations.ne.p;
             currentPowers.kaelte = operations.k.p;
             
-            renderAll(states, operations, inputs, warningMessage); // Übergibt die Warnmeldung an renderAll
+            renderAll(states, operations, inputs, warningMessage);
         } catch (error) {
             console.error("Ein Fehler ist in calculateAll aufgetreten:", error);
             dom.processOverviewContainer.innerHTML = `<div class="process-overview process-error">Ein unerwarteter Fehler ist aufgetreten.</div>`;
         }
     }
     function formatGerman(num, decimals = 0) {
-        if (isNaN(num)) return '--';
+        if (isNaN(num) || num === null) return '--';
         return num.toLocaleString('de-DE', {
             minimumFractionDigits: decimals,
             maximumFractionDigits: decimals
@@ -186,7 +185,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderAll(states, operations, inputs, warningMessage) {
-        // *** ANGEPASSTE ANZEIGELOGIK FÜR WARNMELDUNGEN ***
         if (warningMessage) {
             dom.processOverviewContainer.innerHTML = `<div class="process-overview process-error">${warningMessage}</div>`;
         } else {
@@ -286,16 +284,28 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
+    // *** KORRIGIERTE FUNKTION ***
     function updateStateNode(node, state, colorClass, isInactive = false) {
-        node.className = 'state-node';
+        node.className = 'state-node'; // Setzt Klassen zurück
         if (colorClass) node.classList.add(colorClass);
         if (isInactive) node.classList.add('inactive');
-        if(node.id === 'node-final') node.classList.add('final-state');
-        const spans = node.querySelectorAll('span');
-        spans[1].textContent = formatGerman(state.t, 1);
-        spans[3].textContent = formatGerman(state.rh, 1);
-        spans[5].textContent = formatGerman(state.x, 2);
+        if (node.id === 'node-final') node.classList.add('final-state');
+
+        // Extrahiert den Index aus der Node-ID (z.B. "0" aus "node-0" oder "final" aus "node-final")
+        const index = node.id.split('-')[1];
+        if (!index) return; // Sicherheitsabfrage
+
+        // Wählt die Anzeige-Spans über ihre eindeutige ID aus - das ist robuster
+        const tSpan = node.querySelector(`#res-t-${index}`);
+        const rhSpan = node.querySelector(`#res-rh-${index}`);
+        const xSpan = node.querySelector(`#res-x-${index}`);
+
+        // Weist die formatierten Werte sicher zu
+        if (tSpan) tSpan.textContent = formatGerman(state.t, 1);
+        if (rhSpan) rhSpan.textContent = formatGerman(state.rh, 1);
+        if (xSpan) xSpan.textContent = formatGerman(state.x, 2);
     }
+
     function updateComponentNode(comp, power, kondensat = -1, wasserstrom = 0) {
         comp.p.textContent = formatGerman(power, 2);
         comp.node.classList.toggle('active', power > 0);
