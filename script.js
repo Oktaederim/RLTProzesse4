@@ -128,22 +128,27 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             states[1] = { ...currentState };
             
-            if (inputs.kuehlerAktiv && currentState.t > zuluftSoll.t + TOLERANCE) {
-                if (inputs.kuehlmodus === 'dehumidify' && currentState.x > zuluftSoll.x + TOLERANCE) {
+            // *** KORRIGIERTE LOGIK FÜR KÜHLUNG / ENTFEUCHTUNG ***
+            const needsCooling = currentState.t > zuluftSoll.t + TOLERANCE;
+            const needsDehumidification = inputs.kuehlmodus === 'dehumidify' && currentState.x > zuluftSoll.x + TOLERANCE;
+
+            if (inputs.kuehlerAktiv && (needsCooling || needsDehumidification)) {
+                if (needsDehumidification) {
                     const tempNachKuehler = getTd(zuluftSoll.x, inputs.druck);
                     const hNachKuehler = getH(tempNachKuehler, zuluftSoll.x);
                     operations.k.p = massenstrom_kg_s * (currentState.h - hNachKuehler);
                     operations.k.kondensat = massenstrom_kg_s * (currentState.x - zuluftSoll.x) / 1000 * 3600;
                     currentState = { t: tempNachKuehler, h: hNachKuehler, x: zuluftSoll.x, rh: getRh(tempNachKuehler, zuluftSoll.x, inputs.druck) };
-                } else if (inputs.kuehlmodus === 'sensible') {
+                } else if (needsCooling && inputs.kuehlmodus === 'sensible') {
+                    // This part handles sensible cooling only if dehumidification is not needed.
                     const startDewPoint = getTd(currentState.x, inputs.druck);
-                    if (zuluftSoll.t < startDewPoint) {
+                    if (zuluftSoll.t < startDewPoint) { // If cooling target is below dew point, condensation will occur
                         const x_final = getX(zuluftSoll.t, 100, inputs.druck);
                         const h_final = getH(zuluftSoll.t, x_final);
                         operations.k.p = massenstrom_kg_s * (currentState.h - h_final);
                         operations.k.kondensat = massenstrom_kg_s * (currentState.x - x_final) / 1000 * 3600;
                         currentState = { t: zuluftSoll.t, h: h_final, x: x_final, rh: getRh(zuluftSoll.t, x_final, inputs.druck) };
-                    } else {
+                    } else { // Pure sensible cooling
                         const h_final = getH(zuluftSoll.t, currentState.x);
                         operations.k.p = massenstrom_kg_s * (currentState.h - h_final);
                         currentState = { t: zuluftSoll.t, h: h_final, x: currentState.x, rh: getRh(zuluftSoll.t, currentState.x, inputs.druck)};
@@ -389,15 +394,13 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // --- INITIALIZATION ---
-    // ** KORRIGIERTE UND STRUKTURIERTE FUNKTION **
     function addEventListeners() {
         // Buttons
         if (dom.resetBtn) dom.resetBtn.addEventListener('click', resetToDefaults);
         if (dom.resetSlidersBtn) dom.resetSlidersBtn.addEventListener('click', resetSlidersToRef);
         if (dom.setReferenceBtn) dom.setReferenceBtn.addEventListener('click', handleSetReference);
 
-        // Alle 'einfachen' Text- und Zahlenfelder, die nur eine Neuberechnung auslösen
+        // Alle 'einfachen' Text- und Zahlenfelder
         const simpleInputs = [
             dom.tempAussen, dom.rhAussen, dom.druck, dom.preisWaerme, dom.preisStrom, dom.preisKaelte,
             dom.tempHeizVorlauf, dom.tempHeizRuecklauf, dom.tempKuehlVorlauf, dom.tempKuehlRuecklauf,
@@ -414,7 +417,7 @@ document.addEventListener('DOMContentLoaded', () => {
             calculateAll();
         }));
 
-        // Felder mit zusätzlicher Logik (z.B. Synchronisation mit anderen Feldern)
+        // Felder mit zusätzlicher Logik
         if (dom.betriebsstundenGesamt) dom.betriebsstundenGesamt.addEventListener('input', (e) => {
             enforceLimits(e.target);
             updateBetriebszeit(e.target.id);
@@ -426,7 +429,6 @@ document.addEventListener('DOMContentLoaded', () => {
             calculateAll();
         });
 
-        // Felder, die zusätzlich die Slider synchronisieren müssen
         if (dom.volumenstrom) dom.volumenstrom.addEventListener('input', () => {
             enforceLimits(dom.volumenstrom);
             syncAllSlidersToInputs();
@@ -437,14 +439,13 @@ document.addEventListener('DOMContentLoaded', () => {
             syncAllSlidersToInputs();
             calculateAll();
         });
-        // *** HIER IST DIE ENTSCHEIDENDE KORREKTUR ***
         if (dom.rhZuluft) dom.rhZuluft.addEventListener('input', () => {
             enforceLimits(dom.rhZuluft);
             syncAllSlidersToInputs();
             calculateAll();
         });
 
-        // Event Listeners für die Slider selbst
+        // Event Listeners für die Slider
         if (dom.volumenstromSlider) dom.volumenstromSlider.addEventListener('input', () => {
             dom.volumenstrom.value = dom.volumenstromSlider.value;
             dom.volumenstromLabel.textContent = formatGerman(parseFloat(dom.volumenstromSlider.value), 0);
